@@ -52,6 +52,8 @@ export interface RenderDiffArgs {
   output_format?: 'svg' | 'png';
   /** Padding in px. Default: 16 */
   padding?: number;
+  /** Language for syntax highlighting within diff hunks. Auto-detected from file extension if omitted. Use 'diff' for plain diff highlighting. */
+  highlight_language?: string;
 }
 
 export interface MCPResponse {

@@ -192,6 +192,7 @@ async function handleRenderDiff(args: RenderDiffArgs): Promise<MCPResponse> {
     const fontSize = cfg.font_size || 14;
     const padding = cfg.padding ?? 16;
     const outputFormat = cfg.output_format || 'svg';
+    const highlightLang = cfg.highlight_language || detectDiffLanguage(diff);
     const hl = await getHighlighter();
 
     // Parse diff into structured lines
@@ -206,7 +207,7 @@ async function handleRenderDiff(args: RenderDiffArgs): Promise<MCPResponse> {
 
       try {
         const themedTokens = hl.codeToTokensBase(content, {
-          lang: 'diff' as any, // Use diff lang for the + / - context
+          lang: highlightLang as any,
           theme: themeName as any,
         });
 
@@ -335,7 +336,7 @@ When you call this tool, include the full code and tell the user the image is be
 
 Perfect for PR reviews, sharing code changes on mobile, or visualising what changed between two versions.
 
-Accepts standard git diff output (unified format). Automatically parses @@ hunk headers and renders additions/deltions with appropriate backgrounds.
+Accepts standard git diff output (unified format). Automatically parses @@ hunk headers and renders additions/deletions with appropriate backgrounds. Syntax highlighting is language-aware — auto-detected from the diff header (e.g. "diff --git a/file.ts b/file.ts" detects TypeScript).
 
 The output is SVG by default. Set output_format='png' for a raster image.`,
     inputSchema: {
@@ -374,6 +375,10 @@ The output is SVG by default. Set output_format='png' for a raster image.`,
           type: 'number',
           description: 'Padding around the code block in pixels',
           default: 16,
+        },
+        highlight_language: {
+          type: 'string',
+          description: 'Language for syntax highlighting within diff hunks. Auto-detected from file extension if omitted (e.g. from "diff --git a/file.ts b/file.ts"). Set to "diff" for plain diff highlighting.',
         },
       },
       required: ['diff'],
