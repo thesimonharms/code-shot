@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "cobasaja": "file:../cobasaja",
     "typescript": "^5.5.0"
   }
 }
