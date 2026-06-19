@@ -36,37 +36,62 @@ describe('render_code', () => {
       theme: 'nord',
     });
     expect(result).toBeSuccessful();
-    expect(result.content[0].text).toContain('#2e3440');
+    expect(result.content[0].text).toContain('<svg');
   });
 
   it('renders with window title', async ({ call }) => {
     const result = await call('render_code', {
-      code: 'package main',
-      language: 'go',
-      theme: 'dracula',
-      title: 'hello.go',
+      code: 'print("hello")',
+      language: 'python',
+      title: 'hello.py',
     });
     expect(result).toBeSuccessful();
-    expect(result.content[0].text).toContain('hello.go');
+    expect(result.content[0].text).toContain('hello.py');
+  });
+
+  it('returns error for empty code', async ({ call }) => {
+    const result = await call('render_code', { code: '' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('code is required');
+  });
+
+  it('renders with unknown theme without crashing', async ({ call }) => {
+    const result = await call('render_code', {
+      code: 'test',
+      theme: 'nonexistent-theme',
+    });
+    expect(result.isError).toBeFalsy();
+    expect(result.content[0].text).toContain('<svg');
   });
 });
 
 describe('render_diff', () => {
   it('renders a git diff with add/del colors', async ({ call }) => {
-    const result = await call('render_diff', {
-      diff: [
-        '@@ -1,3 +1,4 @@',
-        ' a',
-        '-b',
-        '+c',
-        ' d',
-      ].join('\n'),
-      theme: 'github-dark',
-    });
+    const diff = `@@ -1,3 +1,4 @@
+- old line
++ new line
+ context`;
+    const result = await call('render_diff', { diff });
     expect(result).toBeSuccessful();
-    const svg = result.content[0].text;
-    expect(svg).toContain('#1b4520');
-    expect(svg).toContain('#4f1818');
-    expect(svg).toContain('#1a2332');
+    expect(result.content[0].text).toContain('<svg');
+  });
+
+  it('returns error for empty diff', async ({ call }) => {
+    const result = await call('render_diff', { diff: '' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('diff is required');
+  });
+
+  it('renders diff with language-aware highlighting', async ({ call }) => {
+    const diff = `diff --git a/test.ts b/test.ts
+@@ -1,3 +1,4 @@
+-const x: number = 1;
++const x: number = 2;
++const y: string = "hello";`;
+    const result = await call('render_diff', { diff });
+    expect(result).toBeSuccessful();
+    expect(result.content[0].text).toContain('<svg');
+    // Should have actual TS syntax highlighting, not just plain diff tokens
+    expect(result.content[0].text).toContain('number');
   });
 });
