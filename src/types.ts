@@ -37,6 +37,8 @@ export interface RenderCodeArgs {
   padding?: number;
   /** Use transparent background instead of theme background color. Default: false */
   transparent_background?: boolean;
+  /** Line numbers to highlight (1-indexed). Default: none */
+  highlight_lines?: number[];
 }
 
 export interface RenderDiffArgs {
@@ -58,6 +60,8 @@ export interface RenderDiffArgs {
   highlight_language?: string;
   /** Use transparent background instead of theme background color. Default: false */
   transparent_background?: boolean;
+  /** Line numbers to highlight (1-indexed). Default: none */
+  highlight_lines?: number[];
 }
 
 export interface MCPResponse {

@@ -174,4 +174,22 @@ void describe('renderSvg', () => {
     assert.ok(svg.includes('<svg'));
     assert.ok(svg.includes('>test<'));
   });
+
+  void it('highlights specified lines with selection background', () => {
+    const svg = renderSvg({
+      lines: [
+        { tokens: [{ text: 'line1', color: '#e6edf3' }], lineNumber: 1 },
+        { tokens: [{ text: 'line2', color: '#e6edf3' }], lineNumber: 2 },
+        { tokens: [{ text: 'line3', color: '#e6edf3' }], lineNumber: 3 },
+      ],
+      themeName: 'github-dark',
+      showLineNumbers: true,
+      fontSize: 14,
+      padding: 16,
+      highlightLines: [2],
+    });
+    assert.ok(svg.includes('opacity="0.5"'));
+    // Line 2 should have the highlight rect
+    // Line 1 and 3 should not
+  });
 });

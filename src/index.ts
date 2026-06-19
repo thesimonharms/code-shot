@@ -162,6 +162,7 @@ async function handleRenderCode(args: RenderCodeArgs): Promise<MCPResponse> {
       padding,
       width: cfg.width,
       transparentBackground: cfg.transparent_background,
+      highlightLines: cfg.highlight_lines,
     });
 
     if (outputFormat === 'png') {
@@ -240,6 +241,7 @@ async function handleRenderDiff(args: RenderDiffArgs): Promise<MCPResponse> {
       fontSize,
       padding,
       transparentBackground: cfg.transparent_background,
+      highlightLines: cfg.highlight_lines,
     });
 
     if (outputFormat === 'png') {
@@ -333,6 +335,11 @@ When you call this tool, include the full code and tell the user the image is be
           description: 'Use transparent background instead of theme background color. Default: false',
           default: false,
         },
+        highlight_lines: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'Line numbers to highlight (1-indexed). Example: [3, 7, 12]. Default: none',
+        },
       },
       required: ['code'],
     },
@@ -391,6 +398,11 @@ The output is SVG by default. Set output_format='png' for a raster image.`,
           type: 'boolean',
           description: 'Use transparent background instead of theme background color. Default: false',
           default: false,
+        },
+        highlight_lines: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'Line numbers to highlight (1-indexed). Example: [3, 7, 12]. Default: none',
         },
       },
       required: ['diff'],

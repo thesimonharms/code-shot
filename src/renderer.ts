@@ -137,10 +137,11 @@ interface RenderSvgParams {
   padding: number;
   width?: number;
   transparentBackground?: boolean;
+  highlightLines?: number[];
 }
 
 export function renderSvg(params: RenderSvgParams): string {
-  const { lines, themeName, title, showLineNumbers, fontSize, padding, width: widthChars, transparentBackground } = params;
+  const { lines, themeName, title, showLineNumbers, fontSize, padding, width: widthChars, transparentBackground, highlightLines } = params;
   const theme = getTheme(themeName);
 
   const charWidth = fontSize * CHAR_ASPECT;
@@ -232,6 +233,11 @@ export function renderSvg(params: RenderSvgParams): string {
       parts.push(`<rect x="0" y="${linesStartY + i * lineHeight}" width="${svgWidth}" height="${lineHeight}" fill="${theme.delBg}"/>`);
     } else if (line.diffType === 'hunk') {
       parts.push(`<rect x="0" y="${linesStartY + i * lineHeight}" width="${svgWidth}" height="${lineHeight}" fill="${theme.hunkBg}"/>`);
+    }
+
+    // ── Highlight specific lines (overlays on top of diff background) ──
+    if (highlightLines?.includes(line.lineNumber)) {
+      parts.push(`<rect x="0" y="${linesStartY + i * lineHeight}" width="${svgWidth}" height="${lineHeight}" fill="${theme.selectionBg}" opacity="0.5"/>`);
     }
 
     // Diff marker character (+/-/~)

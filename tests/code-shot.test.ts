@@ -94,4 +94,14 @@ describe('render_diff', () => {
     // Should have actual TS syntax highlighting, not just plain diff tokens
     expect(result.content[0].text).toContain('number');
   });
+
+  it('renders with line highlighting', async ({ call }) => {
+    const result = await call('render_code', {
+      code: 'line one\nline two\nline three',
+      language: 'text',
+      highlight_lines: [2],
+    });
+    expect(result).toBeSuccessful();
+    expect(result.content[0].text).toContain('<svg');
+  });
 });
