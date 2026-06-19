@@ -161,6 +161,7 @@ async function handleRenderCode(args: RenderCodeArgs): Promise<MCPResponse> {
       fontSize,
       padding,
       width: cfg.width,
+      transparentBackground: cfg.transparent_background,
     });
 
     if (outputFormat === 'png') {
@@ -238,6 +239,7 @@ async function handleRenderDiff(args: RenderDiffArgs): Promise<MCPResponse> {
       showLineNumbers,
       fontSize,
       padding,
+      transparentBackground: cfg.transparent_background,
     });
 
     if (outputFormat === 'png') {
@@ -326,6 +328,11 @@ When you call this tool, include the full code and tell the user the image is be
           description: 'Padding around the code block in pixels',
           default: 16,
         },
+        transparent_background: {
+          type: 'boolean',
+          description: 'Use transparent background instead of theme background color. Default: false',
+          default: false,
+        },
       },
       required: ['code'],
     },
@@ -379,6 +386,11 @@ The output is SVG by default. Set output_format='png' for a raster image.`,
         highlight_language: {
           type: 'string',
           description: 'Language for syntax highlighting within diff hunks. Auto-detected from file extension if omitted (e.g. from "diff --git a/file.ts b/file.ts"). Set to "diff" for plain diff highlighting.',
+        },
+        transparent_background: {
+          type: 'boolean',
+          description: 'Use transparent background instead of theme background color. Default: false',
+          default: false,
         },
       },
       required: ['diff'],

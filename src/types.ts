@@ -35,6 +35,8 @@ export interface RenderCodeArgs {
   width?: number;
   /** Padding around the code block in px. Default: 16 */
   padding?: number;
+  /** Use transparent background instead of theme background color. Default: false */
+  transparent_background?: boolean;
 }
 
 export interface RenderDiffArgs {
@@ -54,6 +56,8 @@ export interface RenderDiffArgs {
   padding?: number;
   /** Language for syntax highlighting within diff hunks. Auto-detected from file extension if omitted. Use 'diff' for plain diff highlighting. */
   highlight_language?: string;
+  /** Use transparent background instead of theme background color. Default: false */
+  transparent_background?: boolean;
 }
 
 export interface MCPResponse {

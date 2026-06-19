@@ -158,4 +158,20 @@ void describe('renderSvg', () => {
     assert.ok(svg.includes('clip-path="url(#content-clip)"'));
     assert.ok(svg.includes('id="content-clip">'));
   });
+
+  void it('omits background rect when transparentBackground is true', () => {
+    const svg = renderSvg({
+      lines: [{ tokens: [{ text: 'test', color: '#e6edf3' }], lineNumber: 1 }],
+      themeName: 'github-dark',
+      showLineNumbers: true,
+      fontSize: 14,
+      padding: 16,
+      transparentBackground: true,
+    });
+    // The background rect uses the theme bg color — should not exist
+    assert.ok(!svg.includes('fill="#0d1117"'));
+    // But content and line numbers should still be present
+    assert.ok(svg.includes('<svg'));
+    assert.ok(svg.includes('>test<'));
+  });
 });

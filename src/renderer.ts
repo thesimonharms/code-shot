@@ -136,10 +136,11 @@ interface RenderSvgParams {
   fontSize: number;
   padding: number;
   width?: number;
+  transparentBackground?: boolean;
 }
 
 export function renderSvg(params: RenderSvgParams): string {
-  const { lines, themeName, title, showLineNumbers, fontSize, padding, width: widthChars } = params;
+  const { lines, themeName, title, showLineNumbers, fontSize, padding, width: widthChars, transparentBackground } = params;
   const theme = getTheme(themeName);
 
   const charWidth = fontSize * CHAR_ASPECT;
@@ -200,7 +201,9 @@ export function renderSvg(params: RenderSvgParams): string {
   </defs>`);
 
   // Background
-  parts.push(`<rect x="0" y="0" width="${svgWidth}" height="${svgHeight}" rx="8" fill="${theme.bg}" clip-path="url(#body-clip)"/>`);
+  if (!transparentBackground) {
+    parts.push(`<rect x="0" y="0" width="${svgWidth}" height="${svgHeight}" rx="8" fill="${theme.bg}" clip-path="url(#body-clip)"/>`);
+  }
 
   // Title bar
   if (hasTitle) {
