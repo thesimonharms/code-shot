@@ -1,0 +1,37 @@
+{
+  "name": "code-shot",
+  "version": "0.1.0",
+  "description": "MCP server that renders source code as beautiful images — syntax highlighted, themed, with git diff support. Perfect for sharing code on mobile.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "code-shot": "./dist/index.js"
+  },
+  "files": ["dist/"],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["mcp", "code", "screenshot", "syntax-highlighting", "shiki", "image", "diff"],
+  "license": "MIT",
+  "author": "Simon Harms",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thesimonharms/code-shot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thesimonharms/code-shot/issues"
+  },
+  "homepage": "https://github.com/thesimonharms/code-shot#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "shiki": "^1.27.2",
+    "@resvg/resvg-js": "^2.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}
