@@ -8,10 +8,12 @@
     "code-shot": "./dist/index.js"
   },
   "files": [
-    "dist/"
+    "dist/",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
+    "test": "cobasaja",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
