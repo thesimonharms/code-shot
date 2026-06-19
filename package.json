@@ -13,7 +13,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "cobasaja",
+    "pretest": "npm run build",
+    "test": "cobasaja && node --experimental-strip-types --test tests/renderer.node-test.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
