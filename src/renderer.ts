@@ -179,7 +179,8 @@ export function renderSvg(params: RenderSvgParams): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
 
   // ── Build SVG parts ──
 

@@ -11,19 +11,33 @@
 import { createInterface } from 'node:readline';
 import { createHighlighter, type Highlighter, type BundledLanguage, type BundledTheme } from 'shiki';
 import { writeFile, mkdir } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { tmpdir, homedir } from 'node:os';
+import { join, resolve, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import type { RenderCodeArgs, RenderDiffArgs, MCPResponse, CodeLine, CodeToken, CodeShotConfig } from './types.js';
 import { renderSvg, svgToPng } from './renderer.js';
 import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { resolve } from 'node:path';
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
 const SERVER_NAME = 'code-shot';
-const SERVER_VERSION = '0.1.0';
+
+function loadVersion(): string {
+  try {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const pkg = JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf-8'));
+    return pkg.version;
+  } catch {
+    try {
+      const pkg = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf-8'));
+      return pkg.version;
+    } catch {
+      return '0.0.0';
+    }
+  }
+}
+const SERVER_VERSION = loadVersion();
 
 // ── User Config ──────────────────────────────────────────────────────────────
 
