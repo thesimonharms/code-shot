@@ -22,37 +22,67 @@ Render source code as SVG or PNG with full syntax highlighting.
 
 ### `render_diff`
 
-Render a git unified diff with color-coded additions/deletions.
-
-Same options as `render_code`, plus:
+Render a git unified diff with color-coded additions/deletions and **language-aware syntax highlighting**.
 
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
 | `diff` | string | **required** | Unified diff content (`git diff` output) |
+| `highlight_language` | string | auto-detect | Language for highlighting within hunks. Auto-detected from `diff --git` header (e.g. `file.ts` → TypeScript). Set to `"diff"` for plain diff highlighting. |
+| ... | — | — | Same options as `render_code` |
 
 Diff lines are highlighted with:
 - `@@` hunk headers → blue background
 - `+` additions → green background (`#1b4520` dark / `#dafbe1` light)
 - `-` deletions → red background (`#4f1818` dark / `#ffebe9` light)
 
-## Usage with Hermes
+Syntax highlighting is applied per-hunk in the detected language — not just plain diff markup.
 
-Add to `~/.hermes/config.yaml` (local build):
+## Themes
 
-```yaml
-mcp_servers:
-  code-shot:
-    command: "node"
-    args: ["/path/to/code-shot/dist/index.js"]
+18 bundled themes:
+
+| Dark | Light |
+|------|-------|
+| github-dark | github-light |
+| nord | one-light |
+| one-dark-pro | material-theme-lighter |
+| dracula | min-light |
+| dracula-soft | solarized-light |
+| catppuccin-mocha | catppuccin-latte |
+| material-theme | vitesse-light |
+| min-dark | — |
+| solarized-dark | — |
+| vitesse-dark | — |
+
+## Test Suite
+
+46 tests across two runners:
+
+```
+npm test    # Build → MCP integration tests (cobasaja) → Unit tests (node --test)
 ```
 
-Or from npm (after `npm install -g @thesimonharms/code-shot` or via `npx`):
+- **5 MCP integration tests** (`tests/code-shot.test.ts`) — tool discovery, rendering, error cases
+- **37 unit tests** (`tests/*.node-test.ts`) — renderSvg structure, diffToLines parsing, guessLanguage heuristics
+
+## Usage with Hermes
+
+Add to `~/.hermes/config.yaml`:
 
 ```yaml
 mcp_servers:
   code-shot:
     command: "npx"
     args: ["-y", "@thesimonharms/code-shot"]
+```
+
+Or from local build:
+
+```yaml
+mcp_servers:
+  code-shot:
+    command: "node"
+    args: ["/path/to/code-shot/dist/index.js"]
 ```
 
 ## Configuration
@@ -85,22 +115,21 @@ Tool call arguments override config file values.
 }
 ```
 
-## Build
+## Development
 
 ```bash
 npm install
-npm run build
+npm run build    # tsc
+npm test        # build + cobasaja + node --test
 ```
-
-## Themes
-
-18 bundled themes: `github-dark`, `github-light`, `nord`, `one-dark-pro`, `one-light`, `dracula`, `dracula-soft`, `catppuccin-mocha`, `catppuccin-latte`, `material-theme`, `material-theme-lighter`, `min-dark`, `min-light`, `solarized-dark`, `solarized-light`, `vitesse-dark`, `vitesse-light`.
 
 ## How it works
 
 1. **Shiki** tokenizes the code with full syntax highlighting (grammars for 40+ languages)
 2. **SVG renderer** builds a pixel-perfect SVG with monospace positioning, window chrome, line numbers, and diff markers
 3. **Optional PNG** via `@resvg/resvg-js` for platforms that don't support SVG natively
+4. **Language auto-detection** via shebang parsing and code heuristics (18 language patterns)
+5. **Diff language detection** from `diff --git a/file.ext b/file.ext` headers
 
 No browser, no DOM, no headless Chromium — pure math-based SVG generation.
 
