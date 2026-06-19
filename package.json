@@ -1,5 +1,5 @@
 {
-  "name": "code-shot",
+  "name": "@thesimonharms/code-shot",
   "version": "0.1.0",
   "description": "MCP server that renders source code as beautiful images — syntax highlighted, themed, with git diff support. Perfect for sharing code on mobile.",
   "type": "module",

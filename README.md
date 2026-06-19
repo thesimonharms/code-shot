@@ -1,4 +1,4 @@
-# code-shot
+# @thesimonharms/code-shot
 
 **MCP server that renders source code as beautiful images.** Perfect for AI agents to show code visually to humans on mobile devices, or for sharing syntax-highlighted snippets.
 
@@ -46,13 +46,13 @@ mcp_servers:
     args: ["/path/to/code-shot/dist/index.js"]
 ```
 
-Or from npm (after `npm install -g code-shot` or via `npx`):
+Or from npm (after `npm install -g @thesimonharms/code-shot` or via `npx`):
 
 ```yaml
 mcp_servers:
   code-shot:
     command: "npx"
-    args: ["-y", "code-shot"]
+    args: ["-y", "@thesimonharms/code-shot"]
 ```
 
 ## Configuration
