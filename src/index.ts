@@ -95,17 +95,30 @@ function diffToLines(diff: string): CodeLine[] {
   const lines = diff.split('\n');
   const result: CodeLine[] = [];
   let lineNum = 1;
+  let inDiff = false;
 
   for (const line of lines) {
+    // Skip git commit metadata (before first @@ hunk)
+    if (!inDiff && (line.startsWith('commit ') || line.startsWith('Author:') ||
+        line.startsWith('Date:') || line === '' ||
+        line.startsWith('    ') || line.startsWith('diff --git') ||
+        line.startsWith('index ') || line.startsWith('---') ||
+        line.startsWith('+++'))) {
+      continue;
+    }
+    // Skip diff headers even after inDiff
+    if (line.startsWith('---') || line.startsWith('+++') ||
+        line.startsWith('diff --git') || line.startsWith('index ')) {
+      continue;
+    }
+
     if (line.startsWith('@@')) {
+      inDiff = true;
       result.push({
         tokens: [{ text: line, color: '#8b949e' }],
         lineNumber: lineNum++,
         diffType: 'hunk',
       });
-    } else if (line.startsWith('---') || line.startsWith('+++')) {
-      // File header lines — skip
-      continue;
     } else if (line.startsWith('+')) {
       result.push({
         tokens: [{ text: line.substring(1), color: '#e6edf3' }],
@@ -118,7 +131,8 @@ function diffToLines(diff: string): CodeLine[] {
         lineNumber: lineNum++,
         diffType: 'del',
       });
-    } else {
+    } else if (inDiff) {
+      // Context lines within a diff hunk
       result.push({
         tokens: [{ text: line, color: '#e6edf3' }],
         lineNumber: lineNum++,

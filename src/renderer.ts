@@ -263,9 +263,23 @@ export function renderSvg(params: RenderSvgParams): string {
     }
 
     // ── Syntax-highlighted tokens ──
+    let isFirstToken = true;
     for (const token of line.tokens) {
-      const displayText = token.text.replace(/\t/g, ' '.repeat(TAB_SIZE));
+      let displayText = token.text.replace(/\t/g, ' '.repeat(TAB_SIZE));
       if (!displayText) continue;
+
+      // Strip leading whitespace from the first token only — some SVG renderers
+      // (Telegram, mobile browsers) collapse or mangle leading whitespace in text
+      // elements. Indentation is handled via the x position instead.
+      if (isFirstToken) {
+        const indentMatch = displayText.match(/^ +/);
+        if (indentMatch) {
+          cursorX += indentMatch[0].length * charWidth;
+          displayText = displayText.slice(indentMatch[0].length);
+          if (!displayText) continue;
+        }
+        isFirstToken = false;
+      }
 
       const tokenLen = displayText.length;
       const fillColor = token.color || theme.fg;
@@ -293,7 +307,7 @@ export async function svgToPng(svg: string): Promise<Uint8Array> {
   const resvg = new Resvg(svg, {
     fitTo: { mode: 'original' },
     font: {
-      loadSystemFonts: false,
+      loadSystemFonts: true,
       fontFiles: [],
     },
   });
