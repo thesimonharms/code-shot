@@ -17,6 +17,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import type { RenderCodeArgs, RenderDiffArgs, MCPResponse, CodeLine, CodeToken, CodeShotConfig } from './types.js';
 import { renderSvg, svgToPng } from './renderer.js';
+import { diffToLines, guessLanguage, detectDiffLanguage } from './parse.js';
 import { existsSync, readFileSync } from 'node:fs';
 
 // ── Configuration ────────────────────────────────────────────────────────────
@@ -104,59 +105,6 @@ async function getHighlighter(): Promise<Highlighter> {
 }
 
 // ── Tool Handlers ────────────────────────────────────────────────────────────
-
-function diffToLines(diff: string): CodeLine[] {
-  const lines = diff.split('\n');
-  const result: CodeLine[] = [];
-  let lineNum = 1;
-  let inDiff = false;
-
-  for (const line of lines) {
-    // Skip git commit metadata (before first @@ hunk)
-    if (!inDiff && (line.startsWith('commit ') || line.startsWith('Author:') ||
-        line.startsWith('Date:') || line === '' ||
-        line.startsWith('    ') || line.startsWith('diff --git') ||
-        line.startsWith('index ') || line.startsWith('---') ||
-        line.startsWith('+++'))) {
-      continue;
-    }
-    // Skip diff headers even after inDiff
-    if (line.startsWith('---') || line.startsWith('+++') ||
-        line.startsWith('diff --git') || line.startsWith('index ')) {
-      continue;
-    }
-
-    if (line.startsWith('@@')) {
-      inDiff = true;
-      result.push({
-        tokens: [{ text: line, color: '#8b949e' }],
-        lineNumber: lineNum++,
-        diffType: 'hunk',
-      });
-    } else if (line.startsWith('+')) {
-      result.push({
-        tokens: [{ text: line.substring(1), color: '#e6edf3' }],
-        lineNumber: lineNum++,
-        diffType: 'add',
-      });
-    } else if (line.startsWith('-')) {
-      result.push({
-        tokens: [{ text: line.substring(1), color: '#e6edf3' }],
-        lineNumber: lineNum++,
-        diffType: 'del',
-      });
-    } else if (inDiff) {
-      // Context lines within a diff hunk
-      result.push({
-        tokens: [{ text: line, color: '#e6edf3' }],
-        lineNumber: lineNum++,
-        diffType: 'normal',
-      });
-    }
-  }
-
-  return result;
-}
 
 // ── Tool Handlers ────────────────────────────────────────────────────────────
 async function handleRenderCode(args: RenderCodeArgs): Promise<MCPResponse> {
@@ -305,37 +253,6 @@ async function handleRenderDiff(args: RenderDiffArgs): Promise<MCPResponse> {
   } catch (err: any) {
     return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
   }
-}
-
-// ── Language guessing (simple extension-based) ───────────────────────────────
-
-function guessLanguage(code: string): string {
-  // Check for shebang
-  const firstLine = code.split('\n')[0]?.trim();
-  if (firstLine?.startsWith('#!/')) {
-    if (firstLine.includes('python') || firstLine.includes('python3')) return 'python';
-    if (firstLine.includes('bash') || firstLine.includes('sh')) return 'bash';
-    if (firstLine.includes('node')) return 'javascript';
-    if (firstLine.includes('deno')) return 'typescript';
-    if (firstLine.includes('ruby')) return 'ruby';
-    if (firstLine.includes('perl')) return 'perl';
-  }
-
-  // Quick heuristics based on first non-empty lines
-  const sample = code.slice(0, 1000);
-  if (/^(import|export|interface|type|const\s+\w+\s*:\s*\w)/m.test(sample)) return 'typescript';
-  if (/^(import|export|function|const\s+\w+\s*=\s*(require|\(\)))/m.test(sample)) return 'javascript';
-  if (/^(fn|let\s+mut|impl\s+\w+|use\s+(std|crate|serde))/m.test(sample)) return 'rust';
-  if (/^(func|package|import\s+\()/m.test(sample)) return 'go';
-  if (/^(def\s+\w+|import\s+\w+|from\s+\w+\s+import)/m.test(sample)) return 'python';
-  if (/^(class|public|private|protected|static|void\s+\w+)/m.test(sample)) return 'java';
-  if (/^(use\s+(strict|warnings)|package\s+\w+)/m.test(sample)) return 'perl';
-  if (/^(# (include|define|pragma))/m.test(sample)) return 'c';
-  if (/^(module|open|let|val|fun\s+)/m.test(sample)) return 'kotlin';
-  if (/^(<template|<script|<!DOCTYPE|<html)/m.test(sample)) return 'html';
-  if (/^{[\s\S]*"dependencies"|"scripts"/m.test(sample)) return 'json';
-
-  return 'text';
 }
 
 // ── Tool Definitions ─────────────────────────────────────────────────────────

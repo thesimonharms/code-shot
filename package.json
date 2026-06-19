@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc",
     "pretest": "npm run build",
-    "test": "cobasaja && node --experimental-strip-types --test tests/renderer.node-test.ts",
+    "test": "cobasaja && node --experimental-strip-types --test 'tests/*.node-test.ts'",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
