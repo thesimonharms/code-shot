@@ -145,4 +145,17 @@ void describe('renderSvg', () => {
     assert.ok(svg.includes('indented'));
     assert.ok(!svg.includes('\t'));
   });
+
+  void it('wraps long lines in a clip-path to prevent overflow', () => {
+    const longCode = 'a'.repeat(500);
+    const svg = renderSvg({
+      lines: [{ tokens: [{ text: longCode, color: '#e6edf3' }], lineNumber: 1 }],
+      themeName: 'github-dark',
+      showLineNumbers: true,
+      fontSize: 14,
+      padding: 16,
+    });
+    assert.ok(svg.includes('clip-path="url(#content-clip)"'));
+    assert.ok(svg.includes('id="content-clip">'));
+  });
 });

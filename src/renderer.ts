@@ -192,6 +192,7 @@ export function renderSvg(params: RenderSvgParams): string {
   // Defs — rounded rect clip + blur for title dots
   parts.push(`<defs>
     <clipPath id="body-clip"><rect x="0" y="0" width="${svgWidth}" height="${svgHeight}" rx="8"/></clipPath>
+    <clipPath id="content-clip"><rect x="${padding + gutterWidth}" y="0" width="${contentWidth + padding}" height="${svgHeight}"/></clipPath>
     <linearGradient id="title-grad" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${theme.titleBg}"/>
       <stop offset="100%" stop-color="${theme.bg}"/>
@@ -253,6 +254,9 @@ export function renderSvg(params: RenderSvgParams): string {
       parts.push(`<line x1="${gutterX - 4}" y1="${linesStartY + i * lineHeight}" x2="${gutterX - 4}" y2="${linesStartY + i * lineHeight + lineHeight}" stroke="${theme.gutterBorder}" stroke-width="1"/>`);
     }
 
+    // ── Code content group with clip-path ──
+    parts.push(`<g clip-path="url(#content-clip)">`);
+
     // ── Diff marker ──
     let cursorX = gutterX;
     if (diffMarker) {
@@ -269,9 +273,7 @@ export function renderSvg(params: RenderSvgParams): string {
       let displayText = token.text.replace(/\t/g, ' '.repeat(TAB_SIZE));
       if (!displayText) continue;
 
-      // Strip leading whitespace from the first token only — some SVG renderers
-      // (Telegram, mobile browsers) collapse or mangle leading whitespace in text
-      // elements. Indentation is handled via the x position instead.
+      // Strip leading whitespace from the first token only
       if (isFirstToken) {
         const indentMatch = displayText.match(/^ +/);
         if (indentMatch) {
@@ -295,6 +297,8 @@ export function renderSvg(params: RenderSvgParams): string {
       parts.push(`<text x="${cursorX}" y="${y}" font-family="${FONT_FAMILY}" font-size="${fontSize}" fill="${fillColor}" font-weight="${fontWeight}" font-style="${fontStyle}">${esc(displayText)}</text>`);
       cursorX += tokenLen * charWidth;
     }
+
+    parts.push('</g>'); // end content clip group
   }
 
   parts.push('</svg>');
