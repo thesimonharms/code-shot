@@ -267,26 +267,40 @@ export function renderSvg(params: RenderSvgParams): string {
     parts.push(`<g clip-path="url(#content-clip)">`);
 
     // ── Render the line as a single <text> with <tspan> children ──
-    // Using natural text flow (tspans) instead of absolute per-token x
-    // positioning avoids visible gaps between adjacent tokens when the
-    // rendered font's advance width differs from the hardcoded CHAR_ASPECT
-    // (e.g. when JetBrains Mono is unavailable and resvg falls back to
-    // DejaVu Sans Mono). Monospace fonts guarantee column alignment across
-    // lines because every glyph shares the same advance width.
-    const tspans: string[] = [];
+    // Natural tspan flow avoids gaps between adjacent tokens (e.g. console.log)
+    // when the rendered font's advance width differs from CHAR_ASPECT. Leading
+    // indentation is applied via the text x offset because SVG renderers and
+    // resvg collapse leading whitespace in text content. Whitespace-only tokens
+    // are merged into the previous tspan so inter-token spaces survive strict
+    // SVG whitespace handling (Telegram, mobile browsers).
+    interface TspanPart { fill: string; fontWeight: string; fontStyle: string; text: string; }
+    const tspans: TspanPart[] = [];
+    let textX = gutterX;
+    let isFirstToken = true;
 
     // Diff marker as the first tspan
     if (diffMarker) {
       const markerColor = line.diffType === 'add' ? theme.addMarker
         : line.diffType === 'del' ? theme.delMarker
         : theme.lineNumber;
-      tspans.push(`<tspan fill="${markerColor}" font-weight="bold">${esc(diffMarker)}</tspan>`);
+      tspans.push({ fill: markerColor, fontWeight: 'bold', fontStyle: 'normal', text: diffMarker });
     }
 
     // Syntax-highlighted tokens
     for (const token of line.tokens) {
-      const displayText = token.text.replace(/\t/g, ' '.repeat(TAB_SIZE));
+      let displayText = token.text.replace(/\t/g, ' '.repeat(TAB_SIZE));
       if (!displayText) continue;
+
+      // Leading whitespace on the first token — position via x, not text content
+      if (isFirstToken) {
+        const indentMatch = displayText.match(/^ +/);
+        if (indentMatch) {
+          textX += indentMatch[0].length * charWidth;
+          displayText = displayText.slice(indentMatch[0].length);
+          if (!displayText) continue;
+        }
+        isFirstToken = false;
+      }
 
       const fillColor = token.color || theme.fg;
       let fontWeight = 'normal';
@@ -296,11 +310,20 @@ export function renderSvg(params: RenderSvgParams): string {
         if (token.fontStyle & 2) fontStyle = 'italic';
       }
 
-      tspans.push(`<tspan fill="${fillColor}" font-weight="${fontWeight}" font-style="${fontStyle}">${esc(displayText)}</tspan>`);
+      // Merge whitespace-only tokens into the previous tspan
+      if (/^\s+$/.test(displayText) && tspans.length > 0) {
+        tspans[tspans.length - 1].text += displayText;
+        continue;
+      }
+
+      tspans.push({ fill: fillColor, fontWeight, fontStyle, text: displayText });
     }
 
     if (tspans.length > 0) {
-      parts.push(`<text x="${gutterX}" y="${y}" font-family="${FONT_FAMILY}" font-size="${fontSize}">${tspans.join('')}</text>`);
+      const tspanMarkup = tspans.map(t =>
+        `<tspan fill="${t.fill}" font-weight="${t.fontWeight}" font-style="${t.fontStyle}">${esc(t.text)}</tspan>`
+      ).join('');
+      parts.push(`<text x="${textX}" y="${y}" font-family="${FONT_FAMILY}" font-size="${fontSize}" xml:space="preserve">${tspanMarkup}</text>`);
     }
 
     parts.push('</g>'); // end content clip group

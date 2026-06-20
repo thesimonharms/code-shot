@@ -146,6 +146,66 @@ void describe('renderSvg', () => {
     assert.ok(!svg.includes('\t'));
   });
 
+  void it('positions leading indentation via x offset instead of text content', () => {
+    const gutterX = 16 + (1 * 14 * 0.6 + 16 + 8); // padding + gutter for 1 line
+    const indentChars = 2;
+    const expectedX = gutterX + indentChars * 14 * 0.6;
+    const svg = renderSvg({
+      lines: [{ tokens: [{ text: '  indented', color: '#e6edf3' }], lineNumber: 1 }],
+      themeName: 'github-dark',
+      showLineNumbers: true,
+      fontSize: 14,
+      padding: 16,
+    });
+    assert.ok(svg.includes(`x="${expectedX}"`));
+    assert.ok(svg.includes('>indented<'));
+    assert.ok(!svg.includes('>  indented<'));
+  });
+
+  void it('merges whitespace-only tokens into the previous tspan', () => {
+    const svg = renderSvg({
+      lines: [{
+        tokens: [
+          { text: 'const', color: '#f97583' },
+          { text: ' ', color: '#e1e4e8' },
+          { text: 'x', color: '#79b8ff' },
+        ],
+        lineNumber: 1,
+      }],
+      themeName: 'github-dark',
+      showLineNumbers: true,
+      fontSize: 14,
+      padding: 16,
+    });
+    assert.ok(svg.includes('>const <'));
+    assert.ok(!svg.match(/<tspan[^>]*>\s*<\/tspan>/));
+  });
+
+  void it('renders adjacent tokens in a single text element to avoid positioning gaps', () => {
+    const svg = renderSvg({
+      lines: [{
+        tokens: [
+          { text: 'console', color: '#e6edf3' },
+          { text: '.', color: '#e6edf3' },
+          { text: 'log', color: '#e6edf3' },
+          { text: '(', color: '#e6edf3' },
+          { text: 'svg', color: '#e6edf3' },
+          { text: ')', color: '#e6edf3' },
+        ],
+        lineNumber: 1,
+      }],
+      themeName: 'github-dark',
+      showLineNumbers: false,
+      fontSize: 14,
+      padding: 16,
+    });
+    const lineText = svg.match(/<text[^>]*xml:space="preserve"[^>]*>[\s\S]*?<\/text>/)?.[0] ?? '';
+    assert.ok(lineText.includes('>console</tspan><tspan'));
+    assert.ok(lineText.includes('>.</tspan><tspan'));
+    assert.ok(lineText.includes('>log</tspan><tspan'));
+    assert.equal((svg.match(/<text x="/g) ?? []).length, 1);
+  });
+
   void it('wraps long lines in a clip-path to prevent overflow', () => {
     const longCode = 'a'.repeat(500);
     const svg = renderSvg({

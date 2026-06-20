@@ -2,6 +2,21 @@
 
 **MCP server that renders source code as beautiful images.** Perfect for AI agents to show code visually to humans on mobile devices, or for sharing syntax-highlighted snippets.
 
+## Example
+
+![Example output from render_code](docs/example.svg)
+
+Generated from this TypeScript snippet with `theme: github-dark` and `title: greet.ts`:
+
+```typescript
+function greet(name: string): string {
+  const message = `Hello, ${name}!`;
+  return message;
+}
+
+console.log(greet('world'));
+```
+
 ## Tools
 
 ### `render_code`
