@@ -266,36 +266,29 @@ export function renderSvg(params: RenderSvgParams): string {
     // ── Code content group with clip-path ──
     parts.push(`<g clip-path="url(#content-clip)">`);
 
-    // ── Diff marker ──
-    let cursorX = gutterX;
+    // ── Render the line as a single <text> with <tspan> children ──
+    // Using natural text flow (tspans) instead of absolute per-token x
+    // positioning avoids visible gaps between adjacent tokens when the
+    // rendered font's advance width differs from the hardcoded CHAR_ASPECT
+    // (e.g. when JetBrains Mono is unavailable and resvg falls back to
+    // DejaVu Sans Mono). Monospace fonts guarantee column alignment across
+    // lines because every glyph shares the same advance width.
+    const tspans: string[] = [];
+
+    // Diff marker as the first tspan
     if (diffMarker) {
       const markerColor = line.diffType === 'add' ? theme.addMarker
         : line.diffType === 'del' ? theme.delMarker
         : theme.lineNumber;
-      parts.push(`<text x="${cursorX}" y="${y}" font-family="${FONT_FAMILY}" font-size="${fontSize}" fill="${markerColor}" font-weight="bold">${esc(diffMarker)}</text>`);
-      cursorX += charWidth;
+      tspans.push(`<tspan fill="${markerColor}" font-weight="bold">${esc(diffMarker)}</tspan>`);
     }
 
-    // ── Syntax-highlighted tokens ──
-    let isFirstToken = true;
+    // Syntax-highlighted tokens
     for (const token of line.tokens) {
-      let displayText = token.text.replace(/\t/g, ' '.repeat(TAB_SIZE));
+      const displayText = token.text.replace(/\t/g, ' '.repeat(TAB_SIZE));
       if (!displayText) continue;
 
-      // Strip leading whitespace from the first token only
-      if (isFirstToken) {
-        const indentMatch = displayText.match(/^ +/);
-        if (indentMatch) {
-          cursorX += indentMatch[0].length * charWidth;
-          displayText = displayText.slice(indentMatch[0].length);
-          if (!displayText) continue;
-        }
-        isFirstToken = false;
-      }
-
-      const tokenLen = displayText.length;
       const fillColor = token.color || theme.fg;
-
       let fontWeight = 'normal';
       let fontStyle = 'normal';
       if (token.fontStyle !== undefined && token.fontStyle !== 0) {
@@ -303,8 +296,11 @@ export function renderSvg(params: RenderSvgParams): string {
         if (token.fontStyle & 2) fontStyle = 'italic';
       }
 
-      parts.push(`<text x="${cursorX}" y="${y}" font-family="${FONT_FAMILY}" font-size="${fontSize}" fill="${fillColor}" font-weight="${fontWeight}" font-style="${fontStyle}">${esc(displayText)}</text>`);
-      cursorX += tokenLen * charWidth;
+      tspans.push(`<tspan fill="${fillColor}" font-weight="${fontWeight}" font-style="${fontStyle}">${esc(displayText)}</tspan>`);
+    }
+
+    if (tspans.length > 0) {
+      parts.push(`<text x="${gutterX}" y="${y}" font-family="${FONT_FAMILY}" font-size="${fontSize}">${tspans.join('')}</text>`);
     }
 
     parts.push('</g>'); // end content clip group
