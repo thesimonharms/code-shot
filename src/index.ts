@@ -9,7 +9,7 @@
  */
 
 import { createInterface } from 'node:readline';
-import { createHighlighter, type Highlighter, type BundledLanguage, type BundledTheme } from 'shiki';
+import { createHighlighter, type Highlighter, type BundledLanguage, type BundledTheme, type SpecialLanguage } from 'shiki';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir, homedir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
@@ -64,12 +64,14 @@ function loadConfig(): CodeShotConfig {
 const userConfig = loadConfig();
 
 /** Merge user config defaults with tool-provided arguments (args win) */
-function mergeConfig<T extends Record<string, any>>(args: T): T {
-  const merged = { ...userConfig } as any;
-  for (const [k, v] of Object.entries(args)) {
+function mergeConfig<T extends object>(args: T): T & Record<string, unknown> {
+  // Start from user config; let present (non-null/undefined) args override.
+  const merged: Record<string, unknown> = { ...userConfig };
+  for (const [k, v] of Object.entries(args as Record<string, unknown>)) {
     if (v !== undefined && v !== null) merged[k] = v;
   }
-  return merged as T;
+  // Unchecked cast: merged is args' shape with userConfig defaults sprinkled in.
+  return merged as T & Record<string, unknown>;
 }
 
 // Languages we support — a broad set for good highlighting
@@ -104,7 +106,45 @@ async function getHighlighter(): Promise<Highlighter> {
   return shiki;
 }
 
-// ── Tool Handlers ────────────────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Resolve a bundled theme's real bg/fg from shiki, so unmapped themes (esp.
+ *  light ones) render with correct colors. Returns {} for unknown themes so
+ *  the renderer falls back to its curated defaults. */
+function resolveThemeColors(hl: Highlighter, themeName: string): { bg?: string; fg?: string } {
+  try {
+    const t = hl.getTheme(themeName as BundledTheme);
+    return { bg: t.bg, fg: t.fg };
+  } catch {
+    return {};
+  }
+}
+
+/** Coerce a config arg to a finite number clamped to [min, ∞), else fallback. */
+function clampNumber(v: unknown, fallback: number, min: number): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) && n >= min ? n : fallback;
+}
+
+/** Normalize highlight_lines into finite numbers (defends against JSON callers
+ *  passing strings), or undefined when absent/invalid. */
+function normalizeHighlightLines(v: unknown): number[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out = v.map(Number).filter(n => Number.isFinite(n));
+  return out.length ? out : undefined;
+}
+
+/** Write a JSON-RPC message to stdout, awaiting backpressure drain so large
+ *  SVG responses are not silently dropped under pipe backpressure. */
+async function send(rpc: string): Promise<void> {
+  const ok = process.stdout.write(rpc);
+  if (!ok) await new Promise<void>(r => process.stdout.once('drain', r));
+}
+
+/** Safely extract a message from a thrown value (catch params are unknown). */
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
 
 // ── Tool Handlers ────────────────────────────────────────────────────────────
 async function handleRenderCode(args: RenderCodeArgs): Promise<MCPResponse> {
@@ -118,24 +158,29 @@ async function handleRenderCode(args: RenderCodeArgs): Promise<MCPResponse> {
     const language = cfg.language || guessLanguage(code);
     const themeName = cfg.theme || 'github-dark';
     const showLineNumbers = cfg.show_line_numbers !== false;
-    const fontSize = cfg.font_size || 14;
-    const padding = cfg.padding ?? 16;
-    const outputFormat = cfg.output_format || 'svg';
+    const fontSize = clampNumber(cfg.font_size, 14, 1);
+    const padding = clampNumber(cfg.padding, 16, 0);
+    // output_format arg wins; else user-config default_format; else 'svg'.
+    const outputFormat = cfg.output_format || userConfig.default_format || 'svg';
 
     const hl = await getHighlighter();
+    const { bg: themeBg, fg: themeFg } = resolveThemeColors(hl, themeName);
+    const fg = themeFg || '#e6edf3';
 
-    // Highlight using shiki
-    const themedTokens = hl.codeToTokensBase(code, {
-      lang: language as any,
-      theme: themeName as any,
-    });
-
-    // If shiki doesn't know the theme, fall back to plain text
-    let fg = '#e6edf3';
+    // Highlight. Unknown lang or theme throws; fall back to a single plain
+    // token per line so rendering still succeeds (matches "renders with
+    // unknown theme without crashing" contract).
+    let themedTokens: { content: string; color?: string; fontStyle?: number }[][];
     try {
-      const bgColor = hl.getTheme(themeName as any).bg;
+      themedTokens = hl.codeToTokensBase(code, {
+        // Unchecked cast: shiki's lang union is BundledLanguage | SpecialLanguage;
+        // a caller may pass any string (errors caught above).
+        lang: language as unknown as BundledLanguage | SpecialLanguage,
+        theme: themeName as unknown as BundledTheme,
+      });
     } catch {
-      // Fallback to plain text tokens
+      const codeLines = code.split('\n');
+      themedTokens = codeLines.map(l => [{ content: l, color: undefined, fontStyle: undefined }]);
     }
 
     // Build CodeLines
@@ -153,16 +198,19 @@ async function handleRenderCode(args: RenderCodeArgs): Promise<MCPResponse> {
       });
     }
 
+    const width = typeof cfg.width === 'number' && Number.isFinite(cfg.width) && cfg.width >= 1 ? cfg.width : undefined;
     const svg = renderSvg({
       lines,
       themeName,
+      themeBg,
+      themeFg,
       title: cfg.title,
       showLineNumbers,
       fontSize,
       padding,
-      width: cfg.width,
+      width,
       transparentBackground: cfg.transparent_background,
-      highlightLines: cfg.highlight_lines,
+      highlightLines: normalizeHighlightLines(cfg.highlight_lines),
     });
 
     if (outputFormat === 'png') {
@@ -176,8 +224,8 @@ async function handleRenderCode(args: RenderCodeArgs): Promise<MCPResponse> {
     }
 
     return { content: [{ type: 'text', text: svg }] };
-  } catch (err: any) {
-    return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+  } catch (err: unknown) {
+    return { content: [{ type: 'text', text: `Error: ${errMsg(err)}` }], isError: true };
   }
 }
 
@@ -191,35 +239,39 @@ async function handleRenderDiff(args: RenderDiffArgs): Promise<MCPResponse> {
     const cfg = mergeConfig(args);
     const themeName = cfg.theme || 'github-dark';
     const showLineNumbers = cfg.show_line_numbers !== false;
-    const fontSize = cfg.font_size || 14;
-    const padding = cfg.padding ?? 16;
-    const outputFormat = cfg.output_format || 'svg';
+    const fontSize = clampNumber(cfg.font_size, 14, 1);
+    const padding = clampNumber(cfg.padding, 16, 0);
+    const outputFormat = cfg.output_format || userConfig.default_format || 'svg';
     const highlightLang = cfg.highlight_language || detectDiffLanguage(diff);
     const hl = await getHighlighter();
+    const { bg: themeBg, fg: themeFg } = resolveThemeColors(hl, themeName);
+    const fg = themeFg || '#e6edf3';
 
     // Parse diff into structured lines
     const lines = diffToLines(diff);
 
-    // Now apply syntax highlighting to the content (strip diff markers first)
+    // Apply syntax highlighting to each line's content (diff markers were
+    // stripped by diffToLines). Unknown lang/theme throws and we keep the
+    // plain-text tokens already on the line.
     for (const line of lines) {
-      if (line.diffType === 'hunk') continue; // skip hunk headers, they're plain text
+      if (line.diffType === 'hunk') continue; // hunk headers stay plain text
 
       const content = line.tokens[0]?.text || '';
       if (!content.trim()) continue;
 
       try {
         const themedTokens = hl.codeToTokensBase(content, {
-          lang: highlightLang as any,
-          theme: themeName as any,
+          // Unchecked cast: shiki lang union; caller may pass any string.
+          lang: highlightLang as unknown as BundledLanguage | SpecialLanguage,
+          theme: themeName as unknown as BundledTheme,
         });
 
-        // Rebuild tokens from highlighting
         const newTokens: CodeToken[] = [];
         for (const tokenLine of themedTokens) {
           for (const t of tokenLine) {
             newTokens.push({
               text: t.content,
-              color: t.color || '#e6edf3',
+              color: t.color || fg,
               fontStyle: t.fontStyle,
             });
           }
@@ -236,12 +288,14 @@ async function handleRenderDiff(args: RenderDiffArgs): Promise<MCPResponse> {
     const svg = renderSvg({
       lines,
       themeName,
+      themeBg,
+      themeFg,
       title: cfg.title,
       showLineNumbers,
       fontSize,
       padding,
       transparentBackground: cfg.transparent_background,
-      highlightLines: cfg.highlight_lines,
+      highlightLines: normalizeHighlightLines(cfg.highlight_lines),
     });
 
     if (outputFormat === 'png') {
@@ -255,8 +309,8 @@ async function handleRenderDiff(args: RenderDiffArgs): Promise<MCPResponse> {
     }
 
     return { content: [{ type: 'text', text: svg }] };
-  } catch (err: any) {
-    return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+  } catch (err: unknown) {
+    return { content: [{ type: 'text', text: `Error: ${errMsg(err)}` }], isError: true };
   }
 }
 
@@ -267,7 +321,7 @@ interface ToolDefinition {
   description: string;
   inputSchema: {
     type: 'object';
-    properties: Record<string, any>;
+    properties: Record<string, unknown>;
     required?: string[];
   };
 }
@@ -448,7 +502,7 @@ async function main() {
 
     switch (msg.method) {
       case 'initialize':
-        process.stdout.write(rpcResult(msgId, {
+        await send(rpcResult(msgId, {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {}, logging: {} },
           serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
@@ -460,13 +514,20 @@ async function main() {
         break;
 
       case 'tools/list':
-        process.stdout.write(rpcResult(msgId, { tools: TOOL_DEFINITIONS }));
+        await send(rpcResult(msgId, { tools: TOOL_DEFINITIONS }));
         break;
 
       case 'tools/call': {
-        const params = msg.params as any;
-        const toolName = params?.name ?? '';
-        const toolArgs = (params?.arguments as Record<string, unknown>) ?? {};
+        // Narrow msg.params (Record<string, unknown>) with type guards so the
+        // extracted name/arguments are checked, not asserted via inline casts.
+        const params = msg.params;
+        const toolName = params && typeof params === 'object' && 'name' in params && typeof params.name === 'string'
+          ? params.name
+          : '';
+        const rawArgs = params && typeof params === 'object' && 'arguments' in params && typeof params.arguments === 'object' && params.arguments !== null
+          ? params.arguments
+          : {};
+        const toolArgs = rawArgs as Record<string, unknown>;
 
         try {
           let result: MCPResponse;
@@ -479,25 +540,33 @@ async function main() {
               result = await handleRenderDiff(toolArgs as unknown as RenderDiffArgs);
               break;
             default:
-              process.stdout.write(rpcError(msgId, -32601, `Unknown tool: ${toolName}`));
+              await send(rpcError(msgId, -32601, `Unknown tool: ${toolName}`));
               continue;
           }
 
-          process.stdout.write(rpcResult(msgId, result));
-        } catch (err: any) {
-          process.stdout.write(rpcError(msgId, -32603, err.message));
+          await send(rpcResult(msgId, result));
+        } catch (err: unknown) {
+          await send(rpcError(msgId, -32603, errMsg(err)));
         }
         break;
       }
 
       case 'ping':
-        process.stdout.write(rpcResult(msgId, {}));
+        await send(rpcResult(msgId, {}));
+        break;
+
+      default:
+        // Unknown method: reply -32601 if this is a request (has an id);
+        // silently ignore notifications (id absent) per JSON-RPC 2.0.
+        if (msgId !== null && msg.id !== undefined) {
+          await send(rpcError(msgId, -32601, `Method not found: ${msg.method ?? ''}`));
+        }
         break;
     }
   }
 }
 
-main().catch(err => {
-  console.error(`[${SERVER_NAME}] fatal: ${err.message}`);
+main().catch((err: unknown) => {
+  console.error(`[${SERVER_NAME}] fatal: ${errMsg(err)}`);
   process.exit(1);
 });

@@ -92,4 +92,53 @@ void describe('diffToLines', () => {
     const lines = diffToLines('   \n\t\n');
     assert.deepEqual(lines, []);
   });
+
+  void it('seeds old/new line numbers from @@ hunk header -o +n syntax', () => {
+    const diff = [
+      '@@ -10,3 +20,4 @@',
+      '- removed',
+      '+ added',
+      ' context',
+    ].join('\n');
+    const lines = diffToLines(diff);
+    assert.equal(lines[0].diffType, 'hunk');
+    // hunk line number seeded from newStart (20)
+    assert.equal(lines[0].lineNumber, 20);
+    // deleted line shows old start (10) as both lineNumber and oldLineNumber
+    assert.equal(lines[1].diffType, 'del');
+    assert.equal(lines[1].lineNumber, 10);
+    assert.equal(lines[1].oldLineNumber, 10);
+    // added line shows new start (20)
+    assert.equal(lines[2].diffType, 'add');
+    assert.equal(lines[2].lineNumber, 20);
+    assert.equal(lines[2].oldLineNumber, undefined);
+    // context line advances both old and new counters
+    assert.equal(lines[3].diffType, 'normal');
+    assert.equal(lines[3].lineNumber, 21);
+    assert.equal(lines[3].oldLineNumber, 11);
+  });
+
+  void it('resets line counters at each @@ hunk header across multiple hunks', () => {
+    const diff = [
+      '@@ -1,2 +1,2 @@',
+      ' keep1',
+      '@@ -50,3 +100,3 @@',
+      '- old2',
+      '+ new2',
+    ].join('\n');
+    const lines = diffToLines(diff);
+    // first hunk context: lineNumber advances to 2
+    assert.equal(lines[1].diffType, 'normal');
+    assert.equal(lines[1].lineNumber, 1);
+    // second hunk header resets to old=50, new=100
+    assert.equal(lines[2].diffType, 'hunk');
+    assert.equal(lines[2].lineNumber, 100);
+    // del in second hunk uses oldStart=50
+    assert.equal(lines[3].diffType, 'del');
+    assert.equal(lines[3].lineNumber, 50);
+    assert.equal(lines[3].oldLineNumber, 50);
+    // add in second hunk uses newStart=100
+    assert.equal(lines[4].diffType, 'add');
+    assert.equal(lines[4].lineNumber, 100);
+  });
 });

@@ -99,9 +99,56 @@ const THEME_MAP: Record<string, Partial<ThemeColors>> = {
   },
 };
 
-function getTheme(themeName: string): ThemeColors {
+/** Valid CSS hex color (3/6/8 digits). Guards SVG attribute injection — any
+ *  externally-sourced color (e.g. shiki theme bg/fg) is validated before use. */
+const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+
+function safeColor(c: string | undefined, fallback: string): string {
+  return c && HEX_RE.test(c) ? c : fallback;
+}
+
+/** Parse an 8/6/3-digit hex color to [r, g, b] (0–255). Unknown → [0,0,0]. */
+function hexToRgb(hex: string): [number, number, number] {
+  let h = hex.replace(/^#/, '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  if (h.length === 8) h = h.slice(0, 6); // drop alpha for luminance
+  const n = h.length === 6 ? parseInt(h, 16) : 0;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** Relative luminance 0..1 (Rec.601 weights — good enough for theme pick). */
+function luminance(hex: string): number {
+  const [r, g, b] = hexToRgb(hex);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+/** Mix a hex color toward white (amt > 0) or black (amt < 0). amt in [-1,1]. */
+function shade(hex: string, amt: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  const mix = (ch: number) => amt >= 0
+    ? Math.round(ch + (255 - ch) * amt)
+    : Math.round(ch * (1 + amt));
+  const toHex = (v: number) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0');
+  return `#${toHex(mix(r))}${toHex(mix(g))}${toHex(mix(b))}`;
+}
+
+// Diff/gutter/title palettes for themes that ship no curated THEME_MAP entry.
+// The palette is chosen by background luminance so light themes get light diff
+// backgrounds instead of the github-dark default (which made adds invisible).
+const DARK_DIFF = {
+  addBg: '#1b4520', delBg: '#4f1818', addMarker: '#3fb950', delMarker: '#f85149',
+  hunkBg: '#1a2332', selectionBg: '#3b5998', gutterBorder: '#21262d', lineNumber: '#636d83',
+};
+const LIGHT_DIFF = {
+  addBg: '#dafbe1', delBg: '#ffebe9', addMarker: '#1a7f37', delMarker: '#cf222e',
+  hunkBg: '#ddf4ff', selectionBg: '#d0e5ff', gutterBorder: '#d8dee4', lineNumber: '#656d76',
+};
+const DEFAULT_DARK = { bg: '#0d1117', fg: '#e6edf3' };
+function getTheme(themeName: string, overrides?: { bg?: string; fg?: string }): ThemeColors {
   const partial = THEME_MAP[themeName];
   if (partial) {
+    // Curated theme — its hand-picked colors win; shiki bg/fg ignored on
+    // purpose to keep the curated look byte-stable.
     return {
       bg: '#0d1117', fg: '#e6edf3',
       lineNumber: '#636d83', lineNumberBg: '#0d1117', gutterBorder: '#21262d',
@@ -112,14 +159,23 @@ function getTheme(themeName: string): ThemeColors {
       ...partial,
     };
   }
-  // Fallback: treat as a raw hex-from-shiki theme — we only know bg/fg
+  // Unmapped theme (one-light, catppuccin-latte, solarized-light, vitesse-*,
+  // dracula-soft, material-theme-lighter, solarized-dark, ...): use shiki's
+  // real bg/fg so the rendered fg matches the theme, and pick a light or dark
+  // diff/gutter palette by background luminance. Without this, light themes
+  // got dark diff backgrounds and an invisible #e6edf3 default fg.
+  const bg = safeColor(overrides?.bg, DEFAULT_DARK.bg);
+  const fg = safeColor(overrides?.fg, DEFAULT_DARK.fg);
+  const light = luminance(bg) > 0.5;
+  const d = light ? LIGHT_DIFF : DARK_DIFF;
   return {
-    bg: '#0d1117', fg: '#e6edf3',
-    lineNumber: '#636d83', lineNumberBg: '#0d1117', gutterBorder: '#21262d',
-    titleBg: '#161b22', titleFg: '#e6edf3',
-    addBg: '#1b4520', delBg: '#4f1818',
-    addMarker: '#3fb950', delMarker: '#f85149',
-    hunkBg: '#1a2332', selectionBg: '#3b5998',
+    bg, fg,
+    lineNumber: d.lineNumber, lineNumberBg: bg, gutterBorder: d.gutterBorder,
+    titleBg: shade(bg, light ? 0.06 : -0.04),
+    titleFg: fg,
+    addBg: d.addBg, delBg: d.delBg,
+    addMarker: d.addMarker, delMarker: d.delMarker,
+    hunkBg: d.hunkBg, selectionBg: d.selectionBg,
   };
 }
 
@@ -131,6 +187,10 @@ const LINE_HEIGHT_RATIO = 1.5;
 interface RenderSvgParams {
   lines: CodeLine[];
   themeName: string;
+  /** Real shiki theme bg/fg. Used only for themes with no curated THEME_MAP
+   *  entry, so unmapped (esp. light) themes render with correct colors. */
+  themeBg?: string;
+  themeFg?: string;
   title?: string;
   showLineNumbers: boolean;
   fontSize: number;
@@ -141,8 +201,8 @@ interface RenderSvgParams {
 }
 
 export function renderSvg(params: RenderSvgParams): string {
-  const { lines, themeName, title, showLineNumbers, fontSize, padding, width: widthChars, transparentBackground, highlightLines } = params;
-  const theme = getTheme(themeName);
+  const { lines, themeName, themeBg, themeFg, title, showLineNumbers, fontSize, padding, width: widthChars, transparentBackground, highlightLines } = params;
+  const theme = getTheme(themeName, themeBg !== undefined || themeFg !== undefined ? { bg: themeBg, fg: themeFg } : undefined);
 
   const charWidth = fontSize * CHAR_ASPECT;
   const lineHeight = fontSize * LINE_HEIGHT_RATIO;
@@ -212,10 +272,11 @@ export function renderSvg(params: RenderSvgParams): string {
     // Window dots
     const dotR = 5;
     const dotY = titleHeight / 2;
-    const dotX = 20;
+    let dotX = 20;
+    const dotSpacing = dotR * 3 + 3; // diameter + gap between centers
     for (const color of ['#ff5f56', '#ffbd2e', '#27c93f']) {
       parts.push(`<circle cx="${dotX}" cy="${dotY}" r="${dotR}" fill="${color}"/>`);
-      // advance by 3*radius + gap
+      dotX += dotSpacing;
     }
     // Title text
     parts.push(`<text x="${svgWidth / 2}" y="${titleHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="${FONT_FAMILY}" font-size="${fontSize}" fill="${theme.titleFg}" opacity="0.85">${esc(title)}</text>`);
@@ -246,8 +307,7 @@ export function renderSvg(params: RenderSvgParams): string {
     else if (line.diffType === 'del') diffMarker = '-';
     else if (line.diffType === 'hunk') diffMarker = '~';
 
-    // ── Line number ──
-    if (showLineNumbers) {
+    if (showLineNumbers && line.diffType !== 'hunk') {
       const lnX = gutterWidth - 8 - 4; // right-aligned
       const lnText = line.oldLineNumber != null && line.diffType === 'del'
         ? String(line.oldLineNumber)

@@ -105,3 +105,52 @@ describe('render_diff', () => {
     expect(result.content[0].text).toContain('<svg');
   });
 });
+
+describe('bug regressions', () => {
+  it('falls back to plain text for an unknown language without erroring', async ({ call }) => {
+    const result = await call('render_code', {
+      code: 'x = 1',
+      language: 'totally-fake-language',
+    });
+    expect(result.isError).toBeFalsy();
+    expect(result.content[0].text).toContain('<svg');
+  });
+
+  it('clamps negative font_size and padding to defaults', async ({ call }) => {
+    const result = await call('render_code', {
+      code: 'x',
+      language: 'text',
+      font_size: -100,
+      padding: -50,
+    });
+    expect(result).toBeSuccessful();
+    // font_size clamps to 14; the first font-size attribute should reflect it
+    expect(result.content[0].text).toContain('font-size="14"');
+  });
+
+  it('responds (does not hang) to an unknown tool with an error', async ({ client }) => {
+    // An unknown tool name must yield a JSON-RPC error response, not silence.
+    // The cobasaja client rejects on RPC error; a hang would time out instead.
+    let caught: unknown;
+    try {
+      await client.callTool('__nonexistent_tool__', {});
+    } catch (e: unknown) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toContain('Unknown tool');
+  });
+
+  it('colors diff line numbers from @@ hunk headers', async ({ call }) => {
+    const diff = `@@ -10,3 +20,4 @@
+- removed
++ added
+ context`;
+    const result = await call('render_diff', { diff });
+    expect(result).toBeSuccessful();
+    const svg = result.content[0].text;
+    // deleted line shows original old start (10); added line shows new start (20)
+    expect(svg).toContain('>10<');
+    expect(svg).toContain('>20<');
+  });
+});

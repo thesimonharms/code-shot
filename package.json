@@ -1,6 +1,6 @@
 {
   "name": "@thesimonharms/code-shot",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "MCP server that renders source code as beautiful images — syntax highlighted, themed, with git diff support. Perfect for sharing code on mobile.",
   "type": "module",
   "main": "./dist/index.js",
@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc",
     "pretest": "npm run build",
-    "test": "cobasaja && node --experimental-strip-types --test 'tests/*.node-test.ts'",
+    "test": "cobasaja && node --experimental-strip-types --test tests/*.node-test.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
