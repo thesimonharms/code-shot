@@ -31,11 +31,21 @@ export function detectDiffLanguage(diff: string): string {
   return 'diff';
 }
 
+/** Parse a hunk header `@@ -o[,ol] +n[,nl] @@` into old/new start line numbers. */
+function parseHunkHeader(line: string): { oldStart: number; newStart: number } {
+  const m = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+  return { oldStart: m ? Number(m[1]) : 1, newStart: m ? Number(m[2]) : 1 };
+}
+
 export function diffToLines(diff: string): CodeLine[] {
   const lines = diff.split('\n');
   const result: CodeLine[] = [];
-  let lineNum = 1;
   let inDiff = false;
+  // Old/new line counters, seeded from each @@ hunk header so deleted lines
+  // show their original (left) number and added/context lines show the new
+  // (right) number — matching how real diff viewers number lines.
+  let oldLn = 1;
+  let newLn = 1;
 
   for (const line of lines) {
     // Skip git commit metadata (before first @@ hunk)
@@ -54,30 +64,37 @@ export function diffToLines(diff: string): CodeLine[] {
 
     if (line.startsWith('@@')) {
       inDiff = true;
+      const { oldStart, newStart } = parseHunkHeader(line);
+      oldLn = oldStart;
+      newLn = newStart;
       result.push({
         tokens: [{ text: line, color: '#8b949e' }],
-        lineNumber: lineNum++,
+        lineNumber: newLn,
         diffType: 'hunk',
       });
     } else if (line.startsWith('+')) {
       result.push({
         tokens: [{ text: line.substring(1), color: '#e6edf3' }],
-        lineNumber: lineNum++,
+        lineNumber: newLn++,
         diffType: 'add',
       });
     } else if (line.startsWith('-')) {
       result.push({
         tokens: [{ text: line.substring(1), color: '#e6edf3' }],
-        lineNumber: lineNum++,
+        lineNumber: oldLn,
+        oldLineNumber: oldLn++,
         diffType: 'del',
       });
     } else if (inDiff) {
-      // Context lines within a diff hunk
+      // Context line within a diff hunk
       result.push({
         tokens: [{ text: line, color: '#e6edf3' }],
-        lineNumber: lineNum++,
+        lineNumber: newLn,
+        oldLineNumber: oldLn,
         diffType: 'normal',
       });
+      oldLn++;
+      newLn++;
     }
   }
 

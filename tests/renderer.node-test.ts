@@ -252,4 +252,82 @@ void describe('renderSvg', () => {
     // Line 2 should have the highlight rect
     // Line 1 and 3 should not
   });
+
+  void it('renders title window dots at increasing x positions (not overlapping)', () => {
+    const svg = renderSvg({
+      lines: [{ tokens: [{ text: 'code', color: '#e6edf3' }], lineNumber: 1 }],
+      themeName: 'github-dark',
+      title: 'app.ts',
+      showLineNumbers: true,
+      fontSize: 14,
+      padding: 16,
+    });
+    const cx = [...svg.matchAll(/<circle cx="(\d+)"/g)].map(m => Number(m[1]));
+    assert.equal(cx.length, 3, 'expected 3 window dots');
+    assert.ok(cx[1] > cx[0], `dot 2 (${cx[1]}) should be right of dot 1 (${cx[0]})`);
+    assert.ok(cx[2] > cx[1], `dot 3 (${cx[2]}) should be right of dot 2 (${cx[1]})`);
+  });
+
+  void it('uses light diff palette for unmapped light theme via bg luminance', () => {
+    const svg = renderSvg({
+      lines: [{ tokens: [{ text: 'added', color: '' }], lineNumber: 1, diffType: 'add' }],
+      themeName: 'one-light',
+      themeBg: '#FAFAFA',
+      themeFg: '#383A42',
+      showLineNumbers: false,
+      fontSize: 14,
+      padding: 16,
+    });
+    assert.ok(svg.includes('#dafbe1'), 'light addBg should be used');
+    assert.ok(!svg.includes('#1b4520'), 'dark addBg must not leak into light theme');
+    assert.ok(svg.includes('#FAFAFA'), 'shiki bg should be used for background');
+  });
+
+  void it('uses dark diff palette for unmapped dark theme via bg luminance', () => {
+    const svg = renderSvg({
+      lines: [{ tokens: [{ text: 'added', color: '' }], lineNumber: 1, diffType: 'add' }],
+      themeName: 'vitesse-dark',
+      themeBg: '#000000',
+      themeFg: '#ffffff',
+      showLineNumbers: false,
+      fontSize: 14,
+      padding: 16,
+    });
+    assert.ok(svg.includes('#1b4520'), 'dark addBg should be used');
+    assert.ok(!svg.includes('#dafbe1'), 'light addBg must not leak into dark theme');
+  });
+
+  void it('renders real shiki theme fg as title text and token fallback', () => {
+    const svg = renderSvg({
+      lines: [{ tokens: [{ text: 'hi', color: '' }], lineNumber: 1 }],
+      themeName: 'solarized-light',
+      themeBg: '#FDF6E3',
+      themeFg: '#657B83',
+      title: 'solarized.ts',
+      showLineNumbers: false,
+      fontSize: 14,
+      padding: 16,
+    });
+    assert.ok(svg.includes('#657B83'), 'shiki fg should appear as title fill and/or token fallback');
+    assert.ok(svg.includes('#FDF6E3'), 'shiki bg should appear in title gradient');
+  });
+
+  void it('omits gutter line number for hunk header lines but keeps the marker', () => {
+    const svg = renderSvg({
+      lines: [
+        { tokens: [{ text: '@@ -1,3 +1,4 @@', color: '#8b949e' }], lineNumber: 1, diffType: 'hunk' },
+        { tokens: [{ text: 'const x = 1', color: '#e6edf3' }], lineNumber: 1, diffType: 'add' },
+      ],
+      themeName: 'github-dark',
+      showLineNumbers: true,
+      fontSize: 14,
+      padding: 16,
+    });
+    assert.ok(svg.includes('>~<'), 'hunk marker ~ should be rendered');
+    // The hunk line should not produce a gutter line-number <text> — the only
+    // gutter number present is "1" for the add line.
+    const lnTexts = [...svg.matchAll(/text-anchor="end"[^>]*>(\d+)</g)].map(m => m[1]);
+    assert.deepEqual(lnTexts, ['1'], `gutter should show only add line number, got: ${JSON.stringify(lnTexts)}`);
+  });
+
 });
